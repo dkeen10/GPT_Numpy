@@ -220,6 +220,5 @@ def main(prompt:str, n_tokens_to_generate: int=40, model_size: str="124M", model
     return output_text
     
 
-
 if __name__ == "__main__":
     fire.Fire(main)
