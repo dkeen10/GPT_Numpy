@@ -4,7 +4,6 @@ import numpy as np
 
 # progress bar for Command Line Interface
 from tqdm import tqdm
-# from transformers import GPT2Tokenizer
 from utils import load_encoder_hparams_and_params
 import fire
 
@@ -30,8 +29,8 @@ def softmax(x):
     :return: The output tensor.
     """
 
-    e_x = np.exp(x - np.max(x))
-    return e_x / e_x.sum(axis=-1, keepdims=True)
+    exp_x = np.exp(x - np.max(x, axis=-1, keepdims=True))
+    return exp_x / np.sum(exp_x, axis=-1, keepdims=True)
 
 
 def layer_norm(x, g, b, eps: float=1e-5):
@@ -61,7 +60,8 @@ def linear(x, w, b):
     :return: The output tensor.
     """
 
-    return np.dot(x, w) + b
+    # return np.dot(x, w) + b
+    return x @ w + b
 
 
 def ffn(x, c_fc, c_proj):
@@ -75,12 +75,11 @@ def ffn(x, c_fc, c_proj):
     :return: The output tensor.
     """
 
-    # [n_seq, n_embd] -> [n_seq, n_embd]
-    # project up
-    a = gelu(linear(x, **c_fc))  # [n_seq, n_embd] -> [n_seq, 4*n_embd]
+    #  project up
+    a = gelu(linear(x, **c_fc))  
 
     # project back down
-    x = linear(a, **c_proj)  # [n_seq, 4*n_embd] -> [n_seq, n_embd]
+    x = linear(a, **c_proj) 
 
     return x
 
@@ -178,7 +177,9 @@ def gpt2(inputs, wte, wpe, blocks, ln_f, n_head):
     x = wte[inputs] + wpe[np.arange(len(inputs))]
     for block in blocks:
         x = transformer_block(x, **block, n_head=n_head)
-    return x
+        
+    x = layer_norm(x, **ln_f)  
+    return x @ wte.T  
 
 
 def generate_response(inputs, params, n_head, n_tokens_to_generate=100):
@@ -190,29 +191,35 @@ def generate_response(inputs, params, n_head, n_tokens_to_generate=100):
     :return: A list of integers representing the output tokens.
     """
 
-    for i in tqdm(range(n_tokens_to_generate)):
-        output = gpt2(inputs, **params, n_head=n_head)
-        next_token = np.argmax(output[-1])
-        inputs.append(int(next_token))
+    for _ in tqdm(range(n_tokens_to_generate), "generating"):  # auto-regressive decode loop
+        logits = gpt2(inputs, **params, n_head=n_head)  # model forward pass
+        next_id = np.argmax(logits[-1])  # greedy sampling
+        inputs.append(int(next_id))  # append prediction to input
 
-    # return generated tokens only
-    return inputs[len(inputs) - n_tokens_to_generate]
-
+    return inputs[len(inputs) - n_tokens_to_generate :]  # only return generated ids
 
 # ______________________________MAIN______________________________
 
 
 def main(prompt:str, n_tokens_to_generate: int=40, model_size: str="124M", models_dir: str="models"):   
-    encoder, h_params, params = load_encoder_hparams_and_params(model_size)
+    # load encoder, hparams, and params from the released open-ai gpt-2 files
+    encoder, hparams, params = load_encoder_hparams_and_params(model_size, models_dir)
 
-    input_tokens = encoder.encode(prompt)
+    # encode the input string using the BPE tokenizer
+    input_ids = encoder.encode(prompt)
 
-    assert len(input_tokens) + n_tokens_to_generate < h_params["n_ctx"], "Cannot generate more tokens than the model allows."
+    # make sure we are not surpassing the max sequence length of our model
+    assert len(input_ids) + n_tokens_to_generate < hparams["n_ctx"]
 
-    output_tokens = generate_response(input_tokens, params, h_params["n_head"], n_tokens_to_generate)
-    output_text =  encoder.decode(output_tokens)
+    # generate output ids
+    output_ids = generate_response(input_ids, params, hparams["n_head"], n_tokens_to_generate)
 
-    print(output_text)
+    # decode the ids back into a string
+    output_text = encoder.decode(output_ids)
+
+    return output_text
+    
+
 
 if __name__ == "__main__":
     fire.Fire(main)
