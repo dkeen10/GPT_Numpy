@@ -17,6 +17,7 @@ def gelu(x):
 
     :return: The output tensor.
     """
+
     return 0.5 * x * (1 + np.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * x**3)))
 
 
@@ -33,6 +34,70 @@ def softmax(x):
     return e_x / e_x.sum(axis=-1, keepdims=True)
 
 
+def layer_norm(x, g, b, eps: float=1e-5):
+    """
+    Layer normalization.
+    
+    :param x: The input tensor.
+    :param g: The gamma parameter.
+    :param b: The beta parameter.
+    
+    :return: The output tensor.
+    """
+    mean = np.mean(x, axis=-1, keepdims=True)
+    variance = np.var(x, axis=-1, keepdims=True)
+    x = (x - mean) / np.sqrt(variance + eps)  # normalize x to have mean=0 and var=1 over last axis
+    return g * x + b  # scale and offset with gamma/beta params
+
+
+def linear(x, w, b):
+    """
+    Linear transformation.
+    
+    :param x: The input tensor.
+    :param w: The weight matrix.
+    :param b: The bias vector.
+    
+    :return: The output tensor.
+    """
+
+    return np.dot(x, w) + b
+
+
+def ffn(x, c_fc, c_proj):
+    """
+    Position-wise feed forward network.
+    
+    :param x: The input tensor.
+    :param c_fc: The parameters for the first fully connected layer.
+    :param c_proj: The parameters for the second fully connected layer.
+    
+    :return: The output tensor.
+    """
+
+    # [n_seq, n_embd] -> [n_seq, n_embd]
+    # project up
+    a = gelu(linear(x, **c_fc))  # [n_seq, n_embd] -> [n_seq, 4*n_embd]
+
+    # project back down
+    x = linear(a, **c_proj)  # [n_seq, 4*n_embd] -> [n_seq, n_embd]
+
+    return x
+
+
+def attention_mask(q, k, v, mask):
+    """
+    Apply a mask to the attention scores.
+    
+    :param q: The query tensor.
+    :param k: The key tensor.
+    :param v: The value tensor.
+    :param mask: The mask tensor.
+    
+    :return: The output tensor.
+    """
+    
+    return softmax(q @ k.T / np.sqrt(q.shape[-1]) + mask) @ v
 
 
 def transformer_block(x, mlp, attn, ln_1, ln_2, n_head):
@@ -57,25 +122,7 @@ def transformer_block(x, mlp, attn, ln_1, ln_2, n_head):
     return x
 
 
-def ffn(x, c_fc, c_proj):
-    """
-    Position-wise feed forward network.
-    
-    :param x: The input tensor.
-    :param c_fc: The parameters for the first fully connected layer.
-    :param c_proj: The parameters for the second fully connected layer.
-    
-    :return: The output tensor.
-    """
 
-    # [n_seq, n_embd] -> [n_seq, n_embd]
-    # project up
-    a = gelu(linear(x, **c_fc))  # [n_seq, n_embd] -> [n_seq, 4*n_embd]
-
-    # project back down
-    x = linear(a, **c_proj)  # [n_seq, 4*n_embd] -> [n_seq, n_embd]
-
-    return x
 
 
 
