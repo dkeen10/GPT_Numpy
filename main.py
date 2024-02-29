@@ -11,13 +11,66 @@ import fire
 # ______________________________MODEL______________________________
 
 
+def transformer_block(x, mlp, attn, ln_1, ln_2, n_head):
+    """
+    A transformer block.
+    
+    :param x: The input tensor.
+    :param mlp: The parameters for the position-wise feed forward network.
+    :param attn: The parameters for the multi-head causal self attention.
+    :param ln_1: The parameters for the first layer normalization.
+    :param ln_2: The parameters for the second layer normalization.
+    :param n_head: The number of attention heads.
+    
+    :return: The output tensor.
+    """
+
+    # multi-head causal self attention
+    x = x + mha(layer_norm(x, **ln_1), **attn, n_head=n_head)  
+    # position-wise feed forward network
+    x = x + ffn(layer_norm(x, **ln_2), **mlp)  
+
+    return x
+
+
+def ffn(x, c_fc, c_proj):
+    """
+    Position-wise feed forward network.
+    
+    :param x: The input tensor.
+    :param c_fc: The parameters for the first fully connected layer.
+    :param c_proj: The parameters for the second fully connected layer.
+    
+    :return: The output tensor.
+    """
+      
+    # [n_seq, n_embd] -> [n_seq, n_embd]
+    # project up
+    a = gelu(linear(x, **c_fc))  # [n_seq, n_embd] -> [n_seq, 4*n_embd]
+
+    # project back down
+    x = linear(a, **c_proj)  # [n_seq, 4*n_embd] -> [n_seq, n_embd]
+
+    return x
+
+
 def gpt2(inputs, wte, wpe, blocks, ln_f, n_head):
     """
     GPT-2 model.
+
+    :param inputs: A list of integers representing the input tokens.
+    :param wte: The word token embeddings. (a lookup matrix of N-vocab, n_embd) (in order to choose words)    
+    :param wpe: The position embeddings. (a lookup matrix of N-ctx, n_embd) (in order to order words in a sentence)
+    :param blocks: A list of transformer blocks. 
+    :param ln_f: The final layer normalization.
+    :param n_head: The number of attention heads.
+
+    :return: A list of integers representing the output tokens.
     """
-    x = inputs
+
+    x = wte[inputs] + wpe[np.arange(len(inputs))]
     for block in blocks:
-        x = block(x, wte, wpe, ln_f, n_head)
+        x = transformer_block(x, **block, n_head=n_head)
     return x
 
 
