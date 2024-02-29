@@ -8,7 +8,31 @@ from transformers import GPT2Tokenizer
 from utils import load_encoder_hparams_and_params
 import fire
 
-# ______________________________MODEL______________________________
+
+def gelu(x):
+    """
+    GELU activation function.
+
+    :param x: The input tensor.
+
+    :return: The output tensor.
+    """
+    return 0.5 * x * (1 + np.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * x**3)))
+
+
+def softmax(x):
+    """
+    Softmax activation function.
+    
+    :param x: The input tensor.
+    
+    :return: The output tensor.
+    """
+
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum(axis=-1, keepdims=True)
+
+
 
 
 def transformer_block(x, mlp, attn, ln_1, ln_2, n_head):
@@ -43,7 +67,7 @@ def ffn(x, c_fc, c_proj):
     
     :return: The output tensor.
     """
-      
+
     # [n_seq, n_embd] -> [n_seq, n_embd]
     # project up
     a = gelu(linear(x, **c_fc))  # [n_seq, n_embd] -> [n_seq, 4*n_embd]
@@ -53,6 +77,9 @@ def ffn(x, c_fc, c_proj):
 
     return x
 
+
+
+# ______________________________MODEL______________________________
 
 def gpt2(inputs, wte, wpe, blocks, ln_f, n_head):
     """
