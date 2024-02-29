@@ -1,10 +1,12 @@
 # https://jaykmody.com/blog/gpt-from-scratch/
 
 import numpy as np
+
+# progress bar for Command Line Interface
 from tqdm import tqdm
 from transformers import GPT2Tokenizer
 from utils import load_encoder_hparams_and_params
-
+import fire
 
 # ______________________________MODEL______________________________
 
@@ -27,8 +29,9 @@ def generate_response(inputs, params, n_head, n_tokens_to_generate=100):
     :param n_tokens: The number of tokens to generate.
     :return: A list of integers representing the output tokens.
     """
-    for i in range(n_tokens_to_generate):
-        output = gpt(inputs)
+
+    for i in tqdm(range(n_tokens_to_generate)):
+        output = gpt2(inputs, **params, n_head=n_head)
         next_token = np.argmax(output[-1])
         inputs.append(int(next_token))
 
@@ -71,11 +74,17 @@ def train(texts: list[list[str]], params):
 # ______________________________MAIN______________________________
 
 
-def main():
-    inputs = [1, 2, 3]
-    response = generate_response(inputs)
-    print(response)
+def main(prompt:str, n_tokens_to_generate: int=40, model_size: str="124M", models_dir: str="models"):   
+    encoder, h_params, params = load_encoder_hparams_and_params(model_size)
 
+    input_tokens = encoder.encode(prompt)
+
+    assert len(input_tokens) + n_tokens_to_generate < h_params["n_ctx"], "Cannot generate more tokens than the model allows."
+
+    output_tokens = generate_response(input_tokens, params, h_params["n_head"], n_tokens_to_generate)
+    output_text =  encoder.decode(output_tokens)
+
+    print(output_text)
 
 if __name__ == "__main__":
-    main()
+    fire.Fire(main)
